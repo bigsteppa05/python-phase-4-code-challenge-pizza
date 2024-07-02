@@ -33,7 +33,7 @@ class RestaurantDetail(Resource):
     def get(self, id):
         restaurant = Restaurant.query.get(id)
         if restaurant:
-            return restaurant.to_dict(only=('id', 'name', 'address', 'restaurant_pizzas')), 200
+            return restaurant.to_dict(only=('id', 'name', 'address', 'restaurant_pizzas.pizza')), 200
         return {'error': 'Restaurant not found'}, 404
     
     def delete(self, id):
@@ -55,19 +55,27 @@ class RestaurantPizzas(Resource):
         price = data.get('price')
         pizza_id = data.get('pizza_id')
         restaurant_id = data.get('restaurant_id')
-        
-        if not (1 <= price <= 30):
-            return {'errors': ['Price must be between 1 and 30']}, 400
-        
+
+        # Validate price range
+        if not isinstance(price, int) or not (1 <= price <= 30):
+            return {'errors': ['validation errors']}, 400
+
+        # Ensure pizza and restaurant exist
+        pizza = Pizza.query.get(pizza_id)
+        restaurant = Restaurant.query.get(restaurant_id)
+        if not pizza or not restaurant:
+            return {'errors': ['validation errors']}, 400
+
         new_restaurant_pizza = RestaurantPizza(price=price, pizza_id=pizza_id, restaurant_id=restaurant_id)
-        
+
         try:
             db.session.add(new_restaurant_pizza)
             db.session.commit()
         except Exception as e:
-            return {'errors': [str(e)]}, 400
-        
-        return new_restaurant_pizza.to_dict(), 201
+            db.session.rollback()
+            return {'errors': ['validation errors']}, 400
+
+        return new_restaurant_pizza.to_dict(rules=('id', 'price', 'pizza', 'restaurant')), 201
 
 api.add_resource(Restaurants, '/restaurants')
 api.add_resource(RestaurantDetail, '/restaurants/<int:id>')
@@ -76,4 +84,7 @@ api.add_resource(RestaurantPizzas, '/restaurant_pizzas')
 
 if __name__ == "__main__":
     app.run(port=5555, debug=True)
+
+
+
 
